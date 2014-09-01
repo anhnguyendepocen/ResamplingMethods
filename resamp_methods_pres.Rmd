@@ -1,0 +1,591 @@
+---
+title: "Resampling Methods"
+author: "Clay Ford"
+date: "November 2014"
+output: beamer_presentation
+
+---
+
+## Traditional Statistical Inference
+
+To estimate the mean of a population:
+
+- Take a random sample from the population
+- Calculate the mean of the sample to estimate population mean
+- Assess variability of sample mean by calculating standard error: $\frac{s}{\sqrt{n}}$
+          
+The standard error gives us an idea of how accurate our estimate is. 
+
+## Illustration of Sampling Distribution
+
+
+```{r, echo=FALSE}
+# "draw" a population
+par(mfrow=c(2,1))
+x <- seq(10,40,0.01)
+y <- dnorm(x,25,5)
+plot(x,y,type="l", main="A Normal Population with mean=25 and SD=5",
+     sub="red arrow is standard deviation")
+abline(v=25)
+# add arrow to show 1 standard deviation
+arrows(25,dnorm(25+5,25,5), (25+5), dnorm(25+5,25,5),col="red")
+
+# build a sampling distribution via simulation;
+# sample n=15 from the population and find mean; 
+# repeat 5000 times and create histogram to visualize sampling distribution;
+set.seed(123)
+sample.means <- replicate(10000, mean(rnorm(15, 25, 5)))
+hist(sample.means, xlim=c(10,40), freq=F,
+     breaks=30, main="Simulated Sampling Distribution of mean for n=15",
+     sub="red arrow is standard error")
+sem <- sd(sample.means) # estimated standard error
+# add arrow to show 1 standard deviation (ie, 1 standard error)
+lines(x,dnorm(x,25,sem))
+arrows(25,dnorm(25+sem,25,sem), (25+sem), 
+       dnorm(25+sem,25,sem),col="red")
+```
+
+
+## What about other population parameters?
+
+For example, median, trimmed mean, ratio, correlation, standard deviation, ...
+
+Sample means are essentially the only statistic with an easy-to-obtain standard error formula.
+
+Deriving standard error formulas for other statistics can be tedious or even impossible.
+
+Derivation of standard error formulas also requires making (possibly incorrect) assumptions about the shape of the sampling distribution.
+
+
+## Sampling Distribution of Median
+
+```{r, echo=FALSE}
+par(mfrow=c(2,1))
+set.seed(2112)
+N <- 10000
+probs <- 0.5
+dists <- runif(N)  
+# mixture of normal and uniform
+data1 <- vector(length=N)
+for(i in 1:N){
+  if(dists[i]<probs){
+    data1[i] = rchisq(1,4)
+  } else {
+    data1[i] = rnorm(1, 13, 4)
+  }
+}
+plot(density(data1),xlab="",main="Non-normal population",xlim=c(0,30))
+
+outm <- replicate(10000,median(sample(data1,15)))
+hist(outm,breaks=30,freq=F,xlim=c(0,30),ylim=c(0,0.2), 
+     xlab="", main="Simulated Sampling Distribution of median for n=15",
+     sub="Sampling distribution is not normally distributed. How do we calculate standard error?")
+sem <- sd(outm)
+x <- seq(0,15,length.out = 200)
+lines(x,dnorm(x,mean(outm),sem),col="blue")
+par(mfrow=c(1,1))
+```
+
+
+## Introducing Resampling Methods
+
+Replace complicated or inaccurate approximations with computer simulations. Also known as "Bootstrapping Methods".
+
+- Use computer to resample from _original_ random sample to create replicate datasets (bootstrap samples)
+- Calculate statistic of interest for _each_ replicate dataset (bootstrap replications)
+- Summarize bootstrap replications (example: take standard deviation to estimate standard error)
+    
+Resampling methods can assess other accuracy measures such as bias, prediction errors, and confidence intervals.
+
+
+## Example of Bootstrap Sample
+
+1. resample _with replacement_
+2. resample the same amount as original data
+
+Example using R:
+```{r}
+# original sample data (n=10)
+myData <- c(18,18,29,20,11,12,16,25,24,21)
+# resample data (n=10)
+sample(myData, replace=TRUE)
+```
+
+
+## Example of Bootstrap Replication
+
+Calculate statistic of interest for each bootstrap sample.
+
+          
+```{r}
+# median of original sample
+median(myData)
+# median of resample
+median(sample(myData, replace=TRUE))
+
+```
+
+We want to do this at least 200 times; in practice we use 999 or more.
+
+
+## Example of 200 Bootstrap Replications
+
+```{r}
+# resample data 200 times, take median each time
+bout <- replicate(200, 
+                  median(sample(myData, replace=T)))
+# bootstrap estimate of standard error:
+sd(bout)
+
+```
+
+Note we'll get a slightly different answer each time we do this.
+
+This was a toy example. We'll use the `boot` package in R for formal resampling procedures.
+
+## Sampling Distribution vs. Bootstrap Distribution
+
+```{r, echo=FALSE}
+par(mfrow=c(1,2))
+set.seed(123)
+sample.means <- replicate(1000, mean(rnorm(15, 25, 5)))
+hist(sample.means, xlim=c(20,30), ylim=c(0,0.35), freq=F, breaks=20, ,xlab="", ylab="",
+     main="Simulated Sampling Distribution\n of mean from N(25,5)\n n=15")
+x <- rnorm(15,25,5)
+library(boot)
+boot.means <- boot(x,function(x,i)mean(x[i]),R=1000)
+# boot.means <- replicate(1000, mean(sample(x, replace=T)))
+hist(boot.means$t, xlim=c(20,30), ylim=c(0,0.35), freq=F, breaks=20, xlab="", ylab="",
+     main="Bootstrap Distribution\n of mean using one sample of n=15 \n from N(25,5)")
+
+```
+
+## Bootstrap Algorithm for Estimating Standard Errors
+### Nonparametric bootstrap
+
+1. Select B independent bootstrap samples $\textbf{x}^{*1},\textbf{x}^{*2},\cdots,\textbf{x}^{*B}$ each consisting of _n_ data values drawn with replacement from **the original data set**
+2. Evaluate the bootstrap replication corresponding to each bootstrap sample,
+$$ \hat{\theta}^{*}(b) = s(\textbf{x}^{*b}) \hspace{10 mm} b = 1,2,\cdots,B$$
+3. Estimate the standard error by the sample standard deviation of the B replications:
+$$\hat{se}_{B}=\sqrt{\sum_{b=1}^{B}[\hat{\theta}^{*}(b) - \hat{\theta}^{*}(\cdot)]^{2}/(B - 1)}$$
+
+where $\hat{\theta}^{*}(\cdot) = \sum_{b=1}^{B}\hat{\theta}^{*}(b)/B$
+
+## Bootstrap Algorithm for Estimating Standard Errors
+### Parametric bootstrap
+
+1. Select B independent bootstrap samples $\textbf{x}^{*1},\textbf{x}^{*2},\cdots,\textbf{x}^{*B}$ each consisting of _n_ data values drawn with replacement from **the parametric estimate of the population**
+2. Evaluate the bootstrap replication corresponding to each bootstrap sample,
+$$ \hat{\theta}^{*}(b) = s(\textbf{x}^{*b}) \hspace{10 mm} b = 1,2,\cdots,B$$
+3. Estimate the standard error by the sample standard deviation of the B replications:
+$$\hat{se}_{B}=\sqrt{\sum_{b=1}^{B}[\hat{\theta}^{*}(b) - \hat{\theta}^{*}(\cdot)]^{2}/(B - 1)}$$
+
+where $\hat{\theta}^{*}(\cdot) = \sum_{b=1}^{B}\hat{\theta}^{*}(b)/B$
+
+
+## Implementing Bootstrap Algorithms in R
+Use the `boot` package.
+
+- Comes with base R installation.
+- Returns a convenient `boot` object with associated `print` and `plot` methods
+- preserves bootstrap replicates
+- allows easy calculation of confidence intervals
+- implements variants on the bootstrap (stratified sampling, time series, censored data)
+
+One catch: user must supply a function.
+
+Let's go to R.
+
+## Bias
+
+Another useful measure of statistical accuracy is _Bias_.
+
+Bias is the difference between the expectation of an estimator $\hat{\theta}$ and the quantity $\theta$ being estimated.
+
+Large bias is almost always undesirable.
+
+![bias](images/bias2.jpg)
+
+
+## Bootstrap Estimate of Bias
+
+The bootstrap estimate of bias is
+
+$$\widehat{bias}_{B} = \hat{\theta}^{*}(\cdot) - \hat{\theta}$$
+
+where $\hat{\theta}^{*}(\cdot) = \sum_{b=1}^{B}\hat{\theta}^{*}(b)/B$
+
+In other words, take the mean of the bootstrap replications and subtract the original estimate.
+
+As a rule of thumb, bias less than 0.25 standard errors can be ignored. ($\widehat{bias}/\widehat{se} \leq 0.25$)
+
+Large bias may be an indication that your statistic is not an appropriate estimator of the population parameter.
+
+Let's go to R.
+
+## The Jackknife
+
+The jackknife, first proposed in the 1950's, is the original computer-based method for estimating biases and standard errors.
+
+The jackknife focuses on the samples that _leave out one observation at a time_:
+
+$$\textbf{x}_{(i)} = (x_{1}, x_{2},...x_{i-1}, x_{i+1},...x_{n})$$
+
+The _i_th jackknife sample consists of the data set with the _i_th observation removed. For example, $\textbf{x}_{(1)}$ is the data set with the first observation removed. 
+
+$\hat{\theta}_{(i)}$ is the _i_th jackknife replication of $\hat{\theta}$. $\hat{\theta}_{(1)}$ is the jackknife estimate with the first observation removed.
+
+## The Jackknife Estimates of Bias and Standard Error
+
+The jackknife estimate of bias:
+
+$$\widehat{bias}_{jack} = (n-1)(\hat{\theta}_{(\cdot)} - \hat{\theta})$$
+
+where $\hat{\theta}_{(\cdot)} = \sum_{i=1}^{n}\hat{\theta}_{(i)}/n$.
+
+The jackknife estimate of standard error:
+
+$$\widehat{se}_{jack} = [\frac{n-1}{n}\sum(\hat{\theta}_{(i)} - \hat{\theta}_{(\cdot)})^{2}]^{1/2}$$
+
+The jackknife provides a simple approximation to the bootstrap for estimation of bias and standard errors.
+
+Let's go to R.
+
+## The Jackknife-after-Bootstrap Plot
+
+A common use of the jackknife is for bootstrap diagnostics.
+
+The jackknife-after-bootstrap looks at bootstrap samples in which the _i_th point did not appear.
+
+Centered quantiles are generated for all jackknife samples and plotted against _standardized jackknife influence values_:
+
+$$l_{jack,j} = (n - 1)(\hat{\theta}_{(\cdot)} - \hat{\theta}_{(i)})/\sqrt{(var(\hat{\theta}_{(i)})} $$
+
+R Syntax: `jack.after.boot(boot.object)`
+
+## The Jackknife-after-Bootstrap Plot - Example
+```{r, echo=FALSE}
+library(bootstrap)
+library(boot)
+ratio.fun <- function(dat, ind){
+  tmp <- dat[ind,]
+  mean(tmp$y)/mean(tmp$z)
+}
+
+# do the bootstrap
+bout <- boot(patch, ratio.fun, R=400)
+jack.after.boot(bout)
+```
+
+Let's go to R.
+
+## Confidence Intervals
+
+Standard errors are often used to assign approximate confidence intervals to a parameter of interest.
+
+For example, given a parameter estimate $\hat{\theta}$ and an estimated standard error $\hat{se}$, the usual 95% confidence interval for $\theta$ is
+
+$$\hat{\theta} \pm 1.96 \cdot \hat{se}$$
+
+This gives us a best guess for $\theta$ and how far in error that guess might be (_assuming a symmetric distribution_).
+
+## Symmetric versus Asymmetric Distributions
+
+```{r, echo=FALSE}
+library(boot)
+set.seed(999)
+x <- rnorm(10)
+xbar1 <- exp(mean(x))
+xbar2 <- log(exp(mean(x)))
+xbar.fun <- function(x,i)exp(mean(x[i]))
+xbar.fun2 <- function(x,i)log(exp(mean(x[i])))
+bout1 <- boot(x,xbar.fun,R=1000)
+bout2 <- boot(x,xbar.fun2,R=1000)
+se1 <- sd(bout1$t)
+se2 <- sd(bout2$t)
+par(mfrow=c(1,2))
+hist(bout1$t, main="Asymmetric (requires transformation)", xlab="", sub="Standard CI not accurate")
+points(xbar1,0,col="red",pch=19)
+abline(v=c(xbar1-1.96*se1, xbar1+1.96*se1),col="red")
+hist(bout2$t, main="Symmetric (after transformation)", xlab="", sub="Standard CI works well")
+points(xbar2,0,col="red",pch=19)
+abline(v=c(xbar2-1.96*se2, xbar2+1.96*se2),col="red")
+par(mfrow=c(1,1))
+
+```
+
+
+## Bootstrap Confidence Intervals
+
+A goal of bootstrap methods is to produce dependable confidence intervals regardless of the distribution shape.
+
+- match classic confidence intervals when such intervals are appropriate
+- provide accurate coverage without transforming data
+
+We'll look at two types:
+
+1. Percentile
+2. $BC_{a}$
+
+## The Percentile Interval
+
+How it works: use percentiles of the bootstrap histogram to define confidence limits.
+
+Example: For a 95% percentile interval, the lower bound is the 2.5% percentile and the upper bound the 97.5% percentile.
+
+If the bootstrap distribution is roughly normal, then the classic (standard normal) and percentile intervals will nearly agree.
+
+The percentile method provides good coverage for asymmetric distributions and doesn't require transforming data.
+
+```
+# Basic R code
+boot.ci(boot.out, conf = 0.95, type = "perc")
+```
+
+## The Percentile Interval - Example
+
+
+```{r, echo=FALSE}
+pci <- boot.ci(bout1,type="perc")$percent
+hist(bout1$t, main="Asymmetric bootstrap histogram", xlab="", sub="red lines = classic CI interval; blue lines = percentile interval")
+points(xbar1,0,col="red",pch=19)
+abline(v=c(xbar1-1.96*se1, xbar1+1.96*se1),col="red")
+abline(v=c(pci[4],pci[5]),col="blue")
+```
+
+## The $BC_{a}$ Interval
+
+An improved version of the percentile method. Stands for _Bias-corrected and accelerated_. 
+
+Provides better coverage than the percentile method, automatically corrects for bias in the point estimate, and is preferred in practice.
+
+More difficult to explain than the percentile interval, but not much more difficult to calculate.
+
+```
+# Basic R code
+boot.ci(boot.out, conf = 0.95, type = "bca")
+```
+
+
+## The $BC_{a}$ Interval - Example
+```{r, echo=FALSE}
+bcaci <- boot.ci(bout1,type="bca")$bca
+hist(bout1$t, main="Asymmetric bootstrap histogram", xlab="", sub="red lines = classic CI interval; blue lines = percentile interval; green lines = bca interval")
+points(xbar1,0,col="red",pch=19)
+abline(v=c(xbar1-1.96*se1, xbar1+1.96*se1),col="red")
+abline(v=c(pci[4],pci[5]),col="blue")
+abline(v=c(bcaci[4],bcaci[5]),col="green")
+
+```
+
+## The $BC_{a}$ method
+
+The $BC_{a}$ interval endpoints are also given by percentiles of the bootstrap distribution, but the percentiles are computed using a sophisticated method.
+
+$$BC_{a}: (\hat{\theta}^{*(\alpha_{1})}, \hat{\theta}^{*(\alpha_{2})})$$
+where
+$$\alpha_{1} = \Phi(\hat{z}_{0} + \frac{\hat{z}_{0} + z^{\alpha}}{1-\hat{a}(\hat{z}_{0}+z^{\alpha})})$$
+
+$\alpha_{2}$ is same as $\alpha_{1}$ except $1-\alpha$ replaces $\alpha$.
+
+$\hat{a}$ is the acceleration and $\hat{z}_{0}$ is the bias-correction.
+
+
+## The $BC_{a}$ method - continued
+
+- Acceleration refers to the rate of change of the SE of $\hat{\theta}$ with respect to $\theta$.
+
+- Bias refers to proportion of bootstrap replications less than $\hat{\theta}$.
+
+The formulas for the acceleration and the bias-correction are complicated. See Efron, B. (1987) Better bootstrap confidence intervals (with Discussion). _Journal of the American Statistical Association_, **82**, 171-200.
+
+Let's go to R.
+
+## Permutation Tests
+
+Resampling methods can be use for hypothesis testing. One such method is a Permutaton Test.
+
+The main application for a permutaton test is the Two-Sample Problem:
+
+- Say we observe two independent random samples $\textbf{z} = (z_{1}, z_{2},\cdots,z_{n})$ and $\textbf{y} = (y_{1}, y_{2},\cdots,y_{m})$ drawn from possibly different probability distributions $F$ and $G$.
+- Having observed $\textbf{z}$ and $\textbf{y}$, we wish to test the null hypothesis of no difference between $F$ and $G$.
+
+The permutation test allows us to test this hypothesis without making assumptions about $F$ and $G$.
+
+## Steps of the Permutation Test
+
+Say group 1 has $n$ members and group 2 has $m$ members:
+
+1. combine both groups into one sample
+2. sample $n$ observations WITHOUT replacement and place in one group
+3. place remaining $m$ observations in another group
+4. compute difference between group means
+5. repeat steps 1-4 many times
+6. if original difference falls outside middle 95% of distribution of differences, then reject null.
+
+All permutations of group 1 and group 2 are equally likely if $F = G$.
+
+Note: these steps use Monte Carlo sampling. A true permutation test would compute _all possible_ permutations of group membership.
+
+## Bootstrap Hypothesis Testing
+
+Bootstrap hypothesis testing is similar to the permutation test, except sampling is _with_ replacement instead of without replacement. 
+
+For the two-sample problem:
+
+- In a permutation test, we fix the order of the combined group members and randomly sample permutations of group membership.
+- With the bootstrap, we combine the groups to create an estimate of the common population and then sample _with_ replacement from it to create two groups.
+
+Bootstrap hypothesis testing is more general than the permutation test and can be applied to a range of problems.
+
+## Steps of Bootstrap Hypothesis Testing
+
+For the two-sample problem, say group 1 has $n$ members and group 2 has $m$ members:
+
+1. combine both groups into one sample
+2. sample $n + m$ observations WITH replacement
+3. place the first $n$ observations into one group and the remaining $m$ in another group
+4. compute difference between group means
+5. repeat steps 1-4 many times
+6. if original difference falls outside middle 95% of distribution of differences, then reject null.
+
+Let's go to R.
+
+## Bootstrapping Regressions
+
+We can bootstrap standard errors of regression coefficients. Two ways:
+
+1. *Case resampling*: select R bootstrap samples of the data (i.e. the rows) and fit a model to each sample. 
+2. *Residual resampling*: fit a model to original data set and select R bootstrap samples of residuals to create new responses. We resample residuals and add to fitted reponse values matched to original corresponding observed predictors.
+
+Bootstrapping regressions makes sense for models fit with methods other than least-squares.
+
+## Example of Case Resampling
+
+```{r}
+# cars: speed of cars and the distances taken to stop
+head(cars, n=4)
+s <- sample(nrow(cars), replace=TRUE)
+cars[s[1:4],]
+```
+
+## Example of Residual Resampling
+
+```{r}
+mod <- lm(dist ~ speed, data = cars) # fit model
+rr  <- resid(mod)[s] # resample residuals
+cbind(cars$speed[1:4],fitted(mod)[1:4] + rr[1:4])
+```
+
+## Case Resampling vs. Residual Resampling
+
+If predictors are fixed (not random) values, may make more sense to use residual resampling.
+
+Residual resampling enforces the strong assumption that errors are identically distributed. 
+
+Case resampling is less sensitive to assumptions, therefore it may be preferable in some cases.
+
+Let's go to R.
+
+## Bootstrap Tips
+
+For the bootstrap to work, the sample _must_ be random and the observations independent. 
+
+In the case of time series, a moving-block bootstrap is recommended. (see Bonus material in R script)
+
+Avoid using the bootstrap for extreme statistics such as the minimum, maximum, 90th percentile, etc.
+
+## Cross-Validation
+
+Cross-validation is a resampling method for estimating prediction error. 
+
+Prediction error measures how well a model works.
+
+Assessing this with data used to build model leads to underestimating error rate.
+
+However we don't usually have new data to test the model.
+
+To get around this, cross-validation uses part of the available data to fit the model and a different part to test it.
+
+
+## How Cross-Validation Works
+
+1. Randomly split data into $K$ roughly equal-sized parts. (Typically $K = 5$ or $10$)
+
+2. Hold out the _k_th part and fit the model with the other $K - 1$ parts.
+
+3. Calculate the prediction error of the fitted model using the _k_th part.
+
+4. Do the above for $k = 1,2,\dots K$ and combine the $K$ estimates of prediction error for regression and classification, respectively:
+
+    + $CV_{(k)} = \frac{1}{k}\sum_{i=1}^{k}MSE_{i}$ where $MSE_{i} = (y_{i} - \hat{y}_{i})^2$ (Mean Square Error)
+    + $CV_{(k)} = \frac{1}{k}\sum_{i=1}^{k}Err_{i}$ where $Err = I(y_{i} \neq \hat{y}_{i})$ (Number of misclassified observations)
+
+
+
+## Cross-Validation Notes
+
+When $K = n$ we call this "leave-one-out" cross-validation (LOOCV). 
+
+Using $K = 5$ or $K = 10$ often gives more accurate estimates of prediction error and requires less computation.
+
+The `boot` package provides the `cv.glm` function to calculate K-fold cross-validation prediction error, which requires fitting a model using `glm`.
+
+Cross validation also works for more complex modeling methods.
+
+
+## Cross-Validation for Classification Trees
+
+Classification Trees are simple and useful for interpretation.
+
+The predictor space is split into regions such that the regions contain a decisive majority of a class.
+
+Uses procedure that chooses splitting variables and splitting points that best discriminate between outcome classes.
+
+The rules for creating the regions can be summarized with a tree.
+
+We use cross-validation to determine the optimal tree size.
+
+## Example of a Classification Tree
+Classify species of iris; at each branch, go left if true, right otherwise
+```{r, echo=FALSE}
+library(tree)
+ir.tr <- tree(Species ~ ., iris)
+ir.prune <- prune.misclass(ir.tr, best=4)
+plot(ir.prune)
+text(ir.prune, pretty=0)
+```
+
+## Cross-Validation with Classification Trees
+
+How large to make a tree? Best-sized tree is one with lowest misclassification rate for _new data_.
+
+Usually do not have new data, so we use cross-validation:
+
+1. Split data into 10 groups
+2. Build tree with 90% of data, test with remaining 10%; do for all 10 groups.
+3. For each group, compute misclassification rate
+
+The best tree size is the one that gives the lowest misclassification rate.
+
+It's actually more complicated than this, but that's the general idea. We use _resampling_ to estimate error and determine best tree size.
+
+## References
+
+Canty, A.J. (2002) _Resampling methods in R: the boot package_. R News. **2/3**, 2-7.
+
+Davison, A.C. and Hinkley, D.V. (1997) _Bootstrap methods and their applications_. Cambridge University Press, Cambridge.
+
+Davison, A.C. and Kuonen, D. (2002) _An introduction to the Bootstrap with applications in R_. Statistical Computing & Statistical Graphics Newsletter. **13**, 6-11.
+
+Efron, B. and Tibshirani, R.J. (1993) _An introduction to the bootstrap_. Chapman and Hall, London, New York.
+
+## References (cont'd)
+
+Fox, J. and Weisberg, S. (2012) _Bootstrapping regression models in R, an appendix to an R Companion to Applied Regression, 2nd ed_. Sage, London.
+
+James, G. et al. (2013) _An Introduction to statistical learning_. Springer, New York.
+
+Maindonald, J. and Braun, J.W. (2010) _Data analysis and graphics using R, 3rd Ed_. Cambridge University Press, Cambridge.
+
+
