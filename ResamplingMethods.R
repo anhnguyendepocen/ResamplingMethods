@@ -3,23 +3,49 @@
 # StatLab@UVa Library
 # Clay Ford
 
-# Writing a function in R:
-# Clay: add something here
-
-
 library(boot) 
 library(bootstrap) # has data from book, An Introduction to the Bootstrap (Efron & Tibshirani, 1993)
+
+
+# Functions in R ----------------------------------------------------------
+
+# Quick demo on writing a function in R
+# Use the function() function; arguments are variables 
+
+# EXAMPLE 1
+# write function to calculate Body Mass Index (BMI)
+# Formula: weight (lb) / [height (in)]^2 x 703
+BMI <- function(weight, height) weight/height^2 * 703
+BMI(weight=213,height=69)
+BMI(c(200,198,145),c(65,70,64)) # 3 people
+
+# EXAMPLE 2
+# randomly sample n items from data vector and calculate mean
+smean <- function(data, n){
+  i <- sample(length(data),n) # items to sample
+  mean(data[i])
+}
+
+# generate fake data
+fake <- rnorm(1000,mean = 200,sd = 10)
+# sample 10 items (without replacement) from fake and calculate mean 
+smean(data=fake, n=10)
+
+
+
+# Bootstrapping SE --------------------------------------------------------
 
 # use data that comes from bootstrap package
 # A small randomized experiment done with 7 mice (treatment group).
 # Measurement unit is days of survival following surgery.
 mouse.t
 mean(mouse.t)
-# assess normality
+
+# assess normality; hard to assess with n=7
 qqnorm(mouse.t)
 qqline(mouse.t)
 
-# take a bootstrap sample:
+# take a bootstrap sample (must be with replacement)
 sample(mouse.t,replace=TRUE) 
 
 # take the mean of the bootstrap sample:
@@ -35,6 +61,8 @@ rep
 # estimate SE by calculating sample standard deviation of the B=200
 # replications:
 sd(rep) # Bootstrap estimate of the standard error
+# what did you get?
+
 sd(mouse.t)/sqrt(7) # standard error using formula
 
 # How to do with boot() function (from the boot package)
@@ -42,10 +70,10 @@ sd(mouse.t)/sqrt(7) # standard error using formula
 # In this case it needs two arguments:
 # 1. data
 # 2. indices which define the bootstrap sample
-mean.fun <- function(data,ind)mean(data[ind])
+mean.fun <- function(data,ind) mean(data[ind])
 
 # example of how function works
-indices <- sample(length(mouse.t),replace=T) # generate indices
+indices <- sample(length(mouse.t),replace=TRUE) # generate indices
 indices
 mouse.t
 mouse.t[indices]
@@ -58,13 +86,13 @@ mean.fun(data=mouse.t,ind=indices)
 
 # now use in the boot function with R=200 replications:
 boot(data=mouse.t, statistic=mean.fun, R=200)
+# do it again; different result
 
 # save results
 bout <- boot(data=mouse.t, statistic=mean.fun, R=200)
 
-# examine boot object:
-str(bout) # does not actually have standard error
-bout$t # bootstrap replicates
+# bootstrap replicates
+bout$t 
 
 # standard error calculated when "printing" object
 bout
@@ -81,7 +109,7 @@ boot.array(bout)
 boot.array(bout, indices=TRUE)
 
 
-# EXAMPLE: Standard Error of correlation coefficient
+# EXAMPLE 2: Standard Error of correlation 
 
 # Law school data. A random sample of size n=15 from the universe of 82 USA law
 # schools (as of 1993). Two measurements: LSAT (average score on a national law
@@ -89,10 +117,9 @@ boot.array(bout, indices=TRUE)
 
 law
 plot(law)
-cor(law)
-cor(law$LSAT,law$GPA)
+cor(law[,1],law[,2]) # correlation of column 1 with column 2
 
-# correlation coefficient function
+# function to calculate correlation of indicated rows
 cor.fun <- function(dat,ind){
   cor(dat[ind,1],dat[ind,2])
 }
@@ -115,114 +142,7 @@ plot(bout2)
 # to extract the SE
 sd(bout2$t)
 
-# Bootstrap estimates of SE ranging from 25 to 12800
-B <- c(25, 50, 100, 200, 400, 800, 1600, 3200, 6400, 12800)
-SEb <- numeric(10)
-for(i in seq_along(B)){
-  SEb[i] <- sd(boot(data=law, statistic=cor.fun, R=B[i])$t)
-}
-data.frame(B,SEb=round(SEb,3)) 
-
-
-# compare bootstrap estimate to COMPLETE population of law schools
-law82 
-
-# 999 samples of size 15 drawn from the population
-cors <- replicate(999,cor(law82[sample(82,15, replace=TRUE),-1])[1,2])
-
-# Compare bootstrap replication histogram with sampling distribution from entire
-# population
-par(mfrow=c(1,2))
-hist(bout2$t, breaks=20, xlim=c(0,1),main="Bootstrap") 
-hist(cors, breaks=20, xlim=c(0,1), main="Random samples")
-par(mfrow=c(1,1))
-
-# Note the similarities between the distribution of bootstrap replications and
-# the distribution of random samples from the population.
-
-# Parametric bootstrapping
-# Instead of sampling with replacement from the data, we draw B samples of size
-# n from the parametric estimate of the population
-
-# Assume law data came from bivariate normal population.
-
-# Example of bivariate normal distribution
-library(MASS) # has function mvrnorm()
-library(mvtnorm) # has function dmvnorm()
-# bivariate standard normal pdf
-x <- seq(-3, 3, length.out = 100)
-y <- seq(-3, 3, length.out = 100)
-f <- function(x,y) dmvnorm(cbind(x,y))
-z <- outer(x, y, f)
-persp(x, y, z, expand=0.5,col="green",main = "Bivariate Standard Normal PDF", phi=50)
-
-
-# summary stats for law
-mean(law$LSAT)
-mean(law$GPA)
-cov(law)
-range(law$LSAT)
-range(law$GPA)
-
-# assumed shape of distribution
-x <- seq(500,700,length.out = 100)
-y <- seq(200,400,length.out = 100)
-f <- function(x,y) dmvnorm(cbind(x,y),
-                           mean=c(mean(law$LSAT),mean(law$GPA)),
-                           sigma=cov(law))
-z <- outer(x, y, f)
-persp(x, y, z, expand=0.5,col="green",main = "Assumed Bivariate Normal Distribution of Law Data",
-      phi=50)
-
-
-# draw 15 from the parametric estimate of the population
-mvrnorm(n=15, 
-        mu=c(mean(law$LSAT), mean(law$GPA)), 
-        Sigma=cov(law))
-
-# compute the correlation
-cor(mvrnorm(n=15, 
-            mu=c(mean(law$LSAT), mean(law$GPA)), 
-            Sigma=cov(law)))[1,2]
-
-# now draw 15 and compute correlation 999 times
-pcors <- numeric(999)
-for(i in 1:999){
-  pcors[i] <- cor(mvrnorm(n=15, 
-                          mu=c(mean(law$LSAT), mean(law$GPA)), 
-                          Sigma=cov(law)))[1,2]
-}
-
-# parametric bootstrap estimate of standard error
-sd(pcors) 
-
-# parametric bootstrap using boot() function
-# i.e., same as above, but more formal (and complicated)
-# 1) define maximum likelihood estimates (mle)
-law.mle <- list(c(mean(law$LSAT), mean(law$GPA)), cov(law))
-
-# 2) write function to generate data
-law.sim <- function(law, mle){
-  n <- nrow(law) # 15
-  mvrnorm(n, mu=mle[[1]], Sigma=mle[[2]]) # calls mle in boot() below
-}
-
-# 3) write function to calculate correlation
-law.fun <- function(data, i=1:nrow(data)){
-  d <- data[i,]
-  cor(d[,1],d[,2])
-}
-
-# 4) run parametric bootstrap with boot() function;
-# NOTE: requires sim = "parametric" and ran.gen and mle arguments;
-pbout <- boot(law, law.fun, R=999, sim = "parametric",
-              ran.gen=law.sim, mle=law.mle)
-
-pbout
-plot(pbout)
-
-
-# Bootstrap estimate of Bias ----------------------------------------------
+# EXAMPLE 3: Standard Error of ratio
 
 # Eight subjects wore medical patches designed to infuse a certain
 # naturally-occuring hormone into the blood stream. Each subject had his blood
@@ -242,25 +162,47 @@ head(patch)
 # ratio estimate
 mean(patch$y)/mean(patch$z)
 
-# what's the SE of this estimate? Is it biased?
+# what's the SE of this estimate?
 
 # write a function for boot()
 ratio.fun <- function(dat, ind){
-  tmp <- dat[ind,]
+  tmp <- dat[ind,] 
   mean(tmp$y)/mean(tmp$z)
 }
 
 # do the bootstrap
-bout <- boot(patch, ratio.fun, R=400)
+bout3 <- boot(patch, ratio.fun, R=400)
+bout3
+sd(bout3$t)
+plot(bout3)
+
+# Bootstrap estimate of Bias ----------------------------------------------
+
+# recall mouse bootstrap
 bout
 
-# bias
-mean(bout$t) - bout$t0
-
-# ratio of estimated bias to standard error
-(mean(bout$t) - bout$t0)/sd(bout$t)
+# calculate bias
+mean(bout$t) - bout$t0 
 
 # As a rule of thumb, a bias less than 0.25 standard errors can be ignored.
+abs(mean(bout$t) - bout$t0)/sd(bout$t) < 0.25
+
+# recall law data
+bout2
+mean(bout2$t) - bout2$t0 # bias
+abs(mean(bout2$t) - bout2$t0)/sd(bout2$t) < 0.25
+
+# a function for the above calculations
+bias <- function(obj){
+  list(bias=mean(obj$t) - obj$t0,
+       ignore=abs(mean(obj$t) - obj$t0)/sd(obj$t) < 0.25)
+}
+
+bias(bout)
+bias(bout2)
+
+# patch data
+bias(bout3)
 
 
 # The Jackknife -----------------------------------------------------------
@@ -271,18 +213,25 @@ mean(bout$t) - bout$t0
 mouse.t
 
 # find jackknife values for the sample median
-jackknife(mouse.t, median)
+# use jackknife() function from the bootstrap package
+jackknife(mouse.t, mean)
+# compare to bootstrap SE and bias
+bout
 
 # example with complex data structure (ratio)
+# recall the patch data
+patch
+
 # first write a function; have to use "x" for indices
 ratio.fun <- function(x, dat){
-  mean(dat[x,6])/mean(dat[x,5])
+  mean(dat[x,6])/mean(dat[x,5]) # mean of column 6/mean of column 5
 }
 
 # find jackknife values for the sample ratio
+# have to pass as data to jackknife the vector 1,2,..n.
 jackknife(1:nrow(patch), ratio.fun, patch)
 # Compare to bootstrap values
-bout
+bout3
 
 
 # The jackknife-after-bootstrap -------------------------------------------
@@ -293,8 +242,10 @@ bout
 
 # Calculate the jackknife influence values from a bootstrap output object and
 # plot the corresponding jackknife-after-bootstrap plot.
-# Recall: bout = bootstrap object for the patch data
-jack.after.boot(bout)
+# Recall: bout3 = bootstrap object for the patch data
+jack.after.boot(bout3)
+# can do this as well
+plot(bout3, jack=TRUE) 
 
 # The x-axis are the jackknife influence values
 # The y-axis are the centered jackknife quantiles
@@ -303,625 +254,154 @@ jack.after.boot(bout)
 # vertical asterisks are the quantiles of the centered bootstrap distribution
 # when the indicated observation is removed
 
-# How to calculate centered jackknife quantiles and jackknife influence values
-
-alpha <- c(0.05, 0.1, 0.16, 0.5, 0.84, 0.9, 0.95)
-
-# (1) get the bootstrap replicates
-br <- bout$t
-# (2) get number of rows in data set
-n <- nrow(patch)
-# (3) get the frequency array for the bootstrap resamples
-f <- boot.array(bout)
-# (4) create a placeholder matrix for jackknife quantiles
-percentiles <- matrix(data = NA, length(alpha), n)
-# (5) create a placeholder for jackknife influence values
-J <- numeric(n)
-
-# (6) calculate Jackknife quantiles with jth value removed
-for (j in 1:n) {
-  values <- br[f[, j] == 0] # bootstrap replicates calculated without observation j
-  J[j] <- mean(values) # mean of bootstrap replicates with obs j missing
-  
-  # centered jackknife quantiles w/obs j missing
-  percentiles[, j] <- quantile(values,  sort(alpha, decreasing = T)) - J[j] 
-}
-
-# (7) calculate jackknife influence values
-J <- (n - 1) * (mean(J) - J) 
-# (8) standardize jackknife influence values
-J <- J/sqrt(var(J)) 
-
-J
-percentiles
+# see bonus materials below for details on calculations
 
 # Bootstrap confidence intervals ------------------------------------------
 
-# recall correlation coefficient of law school data
-cor(law)
-corr(law) # function in boot package
-
-# we used bootstrap to estimate standard error
-bout2
-plot(bout2)
-
-# use the boot.ci() function to calculate CI (defaults to 95% CI)
-boot.ci(bout2, type="perc")
-boot.ci(bout2, type="bca")
-# Note the warning: "Some BCa intervals may be unstable"
-# means intervals are using the upper or lower 10 order statistics
-
-ciout <- boot.ci(bout2, type="bca")
-ciout$bca # 2nd and 3rd are indices of the order statistics 
-ciout$bca[2]<=10
-ciout$bca[3]>= (999-9)
-
-# to get rid of warning, can increase R or narrow the interval
+# mouse data
+bout
+plot(bout)
+# histogram and qq plot look symmetric and normal,
+# so normal and percentile intervals should be similar.
+boot.ci(bout, type="norm")
+boot.ci(bout, type="perc")
+boot.ci(bout, type="bca")
+# Note the warning: "Some BCa intervals may be unstable";
+# means interval is using the upper or lower 10 order statistics.
+# to get rid of warning, you can try increasing R or narrow the interval
 boot.ci(bout2, type="bca", conf=0.90)
 
-# can do more than one interval type
-boot.ci(bout2)
-boot.ci(bout2, type="all") # same thing
-boot.ci(bout2, type=c("perc","bca"))
+boot.ci(bout, type=c("perc","bca","norm"))
 
-# In case you're interested, how "basic" bootstrap calculated:
-# Basic bootstrap method
-boot.ci(bout2, type="basic")
-2*bout2$t0 - sort(bout2$t)[(999+1)*(1-0.025)]
-2*bout2$t0 - sort(bout2$t)[(999+1)*0.025]
+# law school data
+bout2
+plot(bout2) # note the skewed histogram
+# histogram and qq plot are not symmetric and normal,
+# so normal and percentile intervals should not be similar.
+boot.ci(bout2, type=c("perc","bca","norm"))
+# anything look strange about "normal" interval?
 
-# In case you're interested, how "normal" bootstrap calculated:
-# Normal bootstrap method
-boot.ci(bout2, type="norm")
-bias <- mean(bout2$t)-bout2$t0 # calculate bias
-(bout2$t0 - bias) + c(sd(bout2$t)*-1.96, sd(bout2$t)*1.96)
-
-# Thirteen accident victims have had the strength of their teeth measured, It is
-# desired to predict teeth strength from measurements not requiring destructive
-# testing. Four such variables have been obtained for each subject, (D1,D2) are
-# difficult to obtain, (E1,E2) are easy to obtain.
-
-data(tooth)
-head(tooth)
-# Question: how do D and E variables compare as predictors of strength?
-
-modD <- lm(strength ~ D1 + D2, data=tooth) # difficult to obtain
-summary(modD)
-modE <- lm(strength ~ E1 + E2, data=tooth) # easy to obtain
-summary(modE)
-
-# calculate residual squared error; smaller is better
-RSED <- sum(modD$residuals^2) # RSE(D)
-RSEE <- sum(modE$residuals^2) # RSE(E)
-
-# comparison statistic: 1/n * [RSE(D) - RSE(E)]
-(RSEE - RSED)*(1/nrow(tooth)) 
-
-# positive value -> E not as good as D;
-# D appears to be better, but need to
-# understand its statistical variability;
-# use a confidence interval to answer this question
-
-# compare predictions from both models
-plot(modD$fitted.values, modE$fitted.values,xlim=c(34,36.5),ylim=c(34,36.5),
-     xlab="D fit", ylab="E fit")
-abline(0,1)
-
-# write a function for boot()
-RSEdiff <- function(dat,ind){
-  modD <- lm(strength ~ D1 + D2, data=dat[ind,]) 
-  modE <- lm(strength ~ E1 + E2, data=dat[ind,]) 
-  RSED <- sum(modD$residuals^2) 
-  RSEE <- sum(modE$residuals^2) 
-  # statistic of interest:
-  (RSEE - RSED)*(1/nrow(dat))
-}
-outb <- boot(tooth, RSEdiff, R=2000)
-outb # note the standard error
-# point estimate less than one standard error above 0,
-# but estimate is biased downward:
-mean(outb$t) - outb$t0
-sum(outb$t<outb$t0)/2000 # about 60% less than point estimate
-plot(outb)
-
-boot.ci(outb, conf=c(0.90,0.95), type=c("perc","bca"))
-jack.after.boot(outb)
-
-
-# Permutation Tests and Bootstrap Hypothesis Testing ----------------------
-
-
-# Again, let's use the mouse data.
-# Having observed these two sets of values from treatment and control,
-# we wish to test the null hypothesis they were drawn from populations
-# with identical probability distributions.
-
-# Say mouse.t was drawn from distribution F,
-# and mouse.c was drawn from distribution G.
-# We want to test F = G, (ie, same probability distributions)
-
-# A traditional test: the T-Test
-# assumes F and G are normally distributed with possibly different means:
-t.test(mouse.t, mouse.c,alternative="greater",var.equal=TRUE)
-
-# Now, let's do a permutation test.
-# It makes no assumptions about distribution of F and G.
-
-# Process: 
-# 1. combine n + m observations from both groups
-# 2. sample n observations WITHOUT replacement and place in one group
-# 3. place remaining m observations in another group
-# 4. compute difference between group means.
-# 5. repeat steps 1-4 many times
-# 6. if original difference falls outside middle 95% of 
-#    dist'n of differences, then reject null.
-
-all.mouse  <- c(mouse.t, mouse.c) 
-n <- length(mouse.t)
-m <- length(mouse.c)
-diff <- numeric(1000)
-for(i in 1:1000){
-  s <- sample(n + m, n, replace = FALSE)
-  diff[i] <- mean(all.mouse[s]) - mean(all.mouse[-s])
-}
-
-# compute achieved significance level (p-value)
-sum(diff >= (mean(mouse.t) - mean(mouse.c)))/1000
-# this also works
-mean(diff >= (mean(mouse.t) - mean(mouse.c)))
-
-# plot distribution of differences
-hist(diff, breaks=30, main="Permutation Test")
-abline(v=(mean(mouse.t) - mean(mouse.c)), lty=2)
-
-# can use the perm package for this, which has permTS() function
-library(perm)
-permTS(mouse.t, mouse.c, alternative ="greater", method="exact.mc",
-       control=permControl(nmc=1000))
-# complete enumeration of all possibilities
-permTS(mouse.t, mouse.c, alternative ="greater", method="exact.ce")
-
-
-# Bootstrap Hypothesis Testing 
-
-# let's analyze the same problem using Bootstrap Hypothesis Testing.
-# Recap: we have samples z and y from possibly different probability 
-# distributions F and G. We want to test null hypothesis F = G 
-# (ie, the two populations are identical)
-
-# Under the null, we assume both groups were drawn from a common population.
-# To test with a bootstrap, we combine both groups into one sample and 
-# use it an estimate of the common population that gave rise to both groups.
-
-# Process:
-# 1. combine n + m observations from both groups (the commone population estimate)
-# 2. sample n + m observations WITH REPLACEMENT
-# 3. put the first n members in one group and the remaining m members in another group
-# 4. compute difference between group means.
-# 5. repeat steps 1-4 many times
-# 6. if original difference falls outside middle 95% of 
-#    dist'n of differences, then reject null.
-
-mouse.t 
-mouse.c 
-mean(mouse.t) - mean(mouse.c)
-
-# combine data for bootstrap calculations
-all.mouse  <- c(mouse.t, mouse.c) 
-m <- length(mouse.t) # get size of first sample
-s <- seq_len(n) # seq_len(n) returns 1,2,...,n
-
-# function for boot() that calculates difference of means;
-# we're testing if the two populations are identical, so I name it same.pop
-same.pop <- function(dat, ind){
-  tmp <- dat[ind]
-  mean(tmp[s]) - mean(tmp[-s])
-}
-
-# do the bootstrap
-hbout <- boot(all.mouse, same.pop, R=1000)
-# calculate p-value (or achieved significance level)
-# number of times bootstrap replicate equaled or exceeded original estimate
-mean(hbout$t >= hbout$t0)
-
-plot(hbout)
-
-
-# more accurate testing can be obtained by bootstrapping the t-statistic.
-
-# classic two-sample t test assumng equal variances
-t.test(mouse.t, mouse.c, var.equal = TRUE)
-# get just the t-statistic
-t.test(mouse.t, mouse.c, var.equal = TRUE)$statistic
-
-# define a function for boot
-t.stat <- function(dat,ind){
-  tmp <- dat[ind]
-  t.test(tmp[s], tmp[-s], var.equal = TRUE)$statistic
-}
-
-# do the bootstrap
-htbout <- boot(all.mouse, t.stat, R=1000)
-# calculate p-value (or achieved significance level)
-# number of times bootstrap replicate equaled or exceeded original estimate
-mean(htbout$t >= htbout$t0)
-
-plot(htbout)
-
+# patch data
+bout3
+plot(bout3)
+boot.ci(bout2, type=c("perc","bca","norm"))
 
 # Bootstraping Regression Models ------------------------------------------
 
+library(car) # for function Boot()
+library(MASS) # for robust regression function rlm()
 
-# cars
+# cell data: Data on cell survival under different radiation doses;
+# comes with bootstrap package
+# dose = raditaion level
+# log.surv = log proportion of surving cells
+cell
+plot(cell) # note the outlier
 
-plot(cars, main = "Stopping Distance versus Speed")
-lines(lowess(cars))
+# fit a standard linear model with quadratic term and no intercept;
+# no intercept because survival is log(1)=0 with no radiation dose
+m1 <- lm(log.surv ~ -1 + poly(dose,2,raw = T), data=cell)
+# resistant regression with rlm()
+m2 <- rlm(log.surv ~ -1 + poly(dose,2,raw = T), data=cell, maxit = 100)
+# add fitted lines
+lines(cell[,1], fitted(m1))
+lines(cell[,1], fitted(m2), lty=2) 
+legend("topright",legend = c("lm","rlm"),lty = c(1,2))
 
-library(car)
-scatterplot(cars$speed, cars$dist)
+summary(m1) # quadratic term significant
+summary(m2) # quadratic term not significant
 
 
-mod1 <- lm(dist~speed,data=cars)
-coef(mod1)
-
-# case resampling
-mod.fun <- function(dat, ind){
-  mod1 <- lm(dist~speed,data=dat[ind,])
-  coef(mod1)
-}
-
-# test function
-s <- sample(nrow(cars), replace=TRUE)
-mod.fun(cars,s)
-
-# use boot() for case resampling
-rbout <- boot(cars, mod.fun, R=1000)
-rbout
-summary(mod1)
-
-# residual resampling
-mod.fun2 <- function(dat, ind){
-  dat$y <- fitted(mod) + resid(mod1)[ind]
-  mod2 <- lm(y~speed,data=dat)
-  coef(mod2)
-}
-
-# test function
-s <- sample(nrow(cars), replace=TRUE)
-mod.fun2(cars,s)
-
-# use boot() for residual resampling
-rbout2 <- boot(cars, mod.fun2, R=1000)
-rbout2
-summary(mod1)
+# doses were fixed values chosen by investigator, therefore makes sense to
+# bootstrap residuals
 
 # the car package has the Boot() function that makes
 # basic bootstrapping of regression models very easy.
-# Note the capital "B": boot() vs. Boot()
-Boot(mod1, R=1000, method="case")
-Boot(mod1, R=1000, method="residual")
+# Note the capital "B": Boot() vs. boot()
+# use method="case" for case resampling
+Boot1 <- Boot(m2, R=999, method="residual")
+summary(Boot1)
 
-# cell data: Data on cell survival under different radiation doses.
-library(MASS) # for robust regression function rlm()
+# compare BootSE to original SE
+summary(m2)$coefficients
 
-head(cell)
-par(mfrow=c(1,2))
-plot(cell, main="with outlier") # note the outlier
-identify(x=cell[,1],y=cell[,2])
-m1 <- lm(log.surv ~ -1 + dose + I(dose^2), data=cell)
-m2 <- rlm(log.surv ~ -1 + dose + I(dose^2), data=cell)
-# add fitted lines
-lines(cell[,1], fitted(m1))
-lines(cell[,1], fitted(m2), lty=2)
-# remove 13th obs and refit
-m3 <- lm(log.surv ~ -1 + dose + I(dose^2), data=cell[-13,])
-m4 <- rlm(log.surv ~ -1 + dose + I(dose^2), data=cell[-13,])
-# replot and add fitted lines
-plot(cell[-13,], main="with outlier removed") # outlier removed
-lines(cell[-13,1], fitted(m3))
-lines(cell[-13,1], fitted(m4), lty=2)
 
-# it doesn't make sense to bootstrap standard errors for lm objects;
-# if errors are close to normal, standard theory suffices;
-# if errors are not normal, use a different method;
-# rlm() uses M-estimation, which is based on aymptotic theory,
-# therefore makes sense to bootstrap the standard errors
-
-rrbout <- Boot(m2, R=1000, method="case")
-# To minimize warnings, increase maxit from 20 to something higher
-# in the rlm() call; see help(rlm)
-
-summary(rrbout)
-# compare to standard errors returned by rlm()
-summary(m2)
-
-# bootstrap confidence intervals using confint() from car package
-confint(rrbout, type="bca")
-confint(rrbout, type="perc")
+# 90% bootstrap confidence intervals using confint() 
+confint(Boot1, type="bca", level=0.90)
+confint(Boot1, type="perc", level=0.90)
 
 # bootstrap diagnostics
 par(mfrow=c(2,1))
-jack.after.boot(rrbout, index=1, main="dose")
-jack.after.boot(rrbout, index=2, main="dose^2")
+jack.after.boot(Boot1, index=1, main="dose")
+jack.after.boot(Boot1, index=2, main="dose^2")
 par(mfrow=c(1,1))
 
 
 # Cross Validation --------------------------------------------------------
 
+# Let's use CV to estimate error rate for logistic regression 
 
-cars
-# The speed of cars and the distances taken to stop. 
-plot(cars)
-nrow(cars)
-mod <- lm(dist ~ speed, data=cars)
-summary(mod)
-summary(mod)$sigma # residual standard error
-summary(mod)$sigma^2 # residual squared error
+# low birth weight data (from Applied Logistic Regression, 2nd ed.)
+# birthwt data from MASS package
 
-# residual squared error "by hand"
-# sum((observed - predicted)^2)/n - p
-sum((cars$dist - mod$fitted)^2)/(nrow(cars) - length(mod$coefficients))
+# Selected variables:
+# low = birth weight < 2500 g (1 = yes, 0 = no)
+# age = age of mother in years
+# lwt = weight of mother in pounds
+# race = race of mother (1 = white, 2 = black, 3 = other)
+# smoke = smoking status during pregnancy
+# ht = history of hypertension
 
-# cross validation (5 fold)
-# 50/5 = 10 (5 groups of 10)
+# Is low birth weight related to the factors above?
+bw.glm <- glm(low ~ age + lwt + factor(race) + smoke + ht, 
+              data=birthwt, family=binomial)
+summary(bw.glm)
+pred <- ifelse(fitted(bw.glm) > 0.5, 1, 0)
+tab <- table(birthwt$low, pred)
+tab
+# error rate
+1 - sum(diag(tab))/sum(tab)
+
+# error rate estimated to be about 27%;
+# estimated with same data used to build model,
+# so probably too optimistic.
+
+# now estimate error rate using 5-fold cross validation
+
+# "manual" 5-fold cross validation
 # first randomly assign rows to one of 5 groups
-g <- rep(1:5,each=10)
-cars$g <- sample(g)
+birthwt$g <- sample(1:5, 189, replace=TRUE)
 
-
-# 5-fold cross validation
-mse.5 <- numeric(5)
+error.rate <- numeric(5)
 for(i in 1:5){
-  tmp.mod <- lm(dist ~ speed, data=cars, subset= g!=i) # build model from all but i-th group
-  tmp.pred <- predict(tmp.mod, newdata=subset(cars,g==i)) # predict results using i-th group
-  mse.5[i] <- sum((cars$dist[cars$g==i] - tmp.pred)^2)/sum(cars$g==i) # calculate error mean square
+  tmp.glm <- glm(low ~ age + lwt + factor(race) + smoke + ht, 
+                 data=birthwt, subset= g!=i, family=binomial)
+  tmp.pred <- predict(tmp.glm, newdata=subset(birthwt, g==i))
+  pred <- ifelse(tmp.pred > 0.5, 1, 0)
+  tab <- table(birthwt$low[birthwt$g==i], pred)
+  error.rate[i] <- 1 - sum(diag(tab))/sum(tab)
 }
-sum(mse.5)/5 # 5-fold CV test error
+sum(error.rate)/5 # 5-fold CV test error
 
-# LOOCV cross validation
-mse.loo <- numeric(50)
-for(i in 1:50){
-  tmp.mod <- lm(dist ~ speed, data=cars[-i,],) # build model from all but i-th row
-  tmp.pred <- predict(tmp.mod, newdata=cars[i,]) # predict results using i-th row
-  mse.loo[i] <- (cars$dist[i] - tmp.pred)^2 # calculate error mean square
-}
-sum(mse.loo)/nrow(cars) # Leave-one-out CV test error
+# cross validation using cv.glm
+# need to create a "cost function" to calculate error rate
+# r = observed response (0 or 1)
+# pi = predicted probability
+# if abs(r - pi) > 0.5, count as a missclassification
+cost <- function(r, pi = 0) mean(abs(r-pi) > 0.5)
 
-
-# faster way with cv.glm() function (in boot package)
-mod2 <- glm(dist ~ speed, data=cars) # Note: need to use glm()
-cv.glm(cars, mod2, K=5)$delta # 5-fold CV
-cv.glm(cars, mod2)$delta # LOOCV
-
+# 5-fold CV
+cv.err <- cv.glm(birthwt, bw.glm, cost, K = 5) 
+cv.err$delta
 # first number is CV estimate; 2nd number is bias-corrected version;
-# LOOCV is always the same but K-fold CV varies.
 
-
-# Example from An Intro to the Boostrap (p. 238)
-
-data(hormone)
-# Amount in milligrams of anti-inflammatory hormone remaining in 27 devices, 
-# after a certain number of hours of wear. The devices were sampled from 3
-# different manufacturing lots, called A, B and C.
-head(hormone)
-plot(amount ~ hrs, data=hormone, pch=Lot)
-
-# fit regression lines to data with different intercepts but common slope:
-mod <- lm(amount ~ hrs + factor(Lot) - 1, data=hormone)
-summary(mod)
-
-# plot the fit with base R graphics
-plot(amount ~ hrs, data=hormone, pch=19, col=as.integer(factor(Lot)))
-abline(a=coef(mod)[2],b=coef(mod)[1],col=1) # a = intercept, b = slope
-abline(a=coef(mod)[3],b=coef(mod)[1],col=2)
-abline(a=coef(mod)[4],b=coef(mod)[1],col=3)
-legend("topright", pch=19, c("A","B","C"), col=unique(as.integer(factor(hormone$Lot))), lty=1)
-
-# plot the fit with ggplot
-library(ggplot2)
-df <- data.frame(amount=predict(mod), hrs=hormone$hrs, Lot=hormone$Lot)
-ggplot(hormone, aes(x=hrs,y=amount,color=Lot)) + geom_point() +
-  geom_line(data=df)
-  
-# Two Questions:
-# 1) How well will model predict amount of hormone remaining for new device?
-# 2) Does this model predict better (or worse) than single regression line?
-
-# answering first question:
-# could look at residual SD (or residual variance):
-summary(mod)$sigma
-summary(mod)$sigma^2
-# but this is too optimistic; using same data to assess model fit that we used
-# to fit the model.
-
-# cross-validation can help us obtain a more realistic estimate of prediction
-# error.
-
-# leave-one-out cross validation (LOOCV)
-# fit a model leaving first observation out:
-mod1 <- lm(amount ~ hrs + factor(Lot) - 1, data=hormone[-1,])
-# compute predicted value for observation left out
-predict(mod1,newdata=hormone[1,])
-hormone[1,"amount"] # observed value
-
-# now do for each observation and compute average cross-validation sum of
-# squares
-n <- nrow(hormone)
-pv <- numeric(n)
-for(i in 1:n){
-  tmp <- lm(amount ~ hrs + factor(Lot) - 1, data=hormone[-i,])
-  pv[i] <- predict(tmp,newdata=hormone[i,])
-}
-# calculate CV
-sum((hormone$amount - pv)^2)/n
-
-# compare to unbiased estimate of residual variance
-summary(mod)$sigma^2
-
-# again, easier to use cv.gml()
-# default is leave-one-out CV
-gmod <- glm(amount ~ hrs + factor(Lot) - 1, data=hormone)
-cv.glm(hormone, gmod)$delta
-
-# plot of residuals and cross-validated residuals;
-# notice the CV residuals are equal to or larger than the usual residuals
-plot(hormone$hrs,mod$residuals, ylim=c(3.5,-3.5))
-abline(h=0)
-points(hormone$hrs,(hormone$amount - pv),pch="*")
-
-
-# residual squared error by Lot
-pv # LOOCV predicted values
-# calculate squared deviations: (observed - predicted)^2
-cvsq <- (hormone$amount - pv)^2
-tapply(cvsq, hormone$Lot, mean)
-# amounts for devices in lot B are more difficult to predict
-
-# Answering second question:
-# Does this model predict better (or worse) than single regression line?
-# again CV can help with this:
-gmod2 <- glm(amount ~ hrs, data=hormone) # does not account for Lot
-cv.glm(gmod2, data=hormone)$delta
-cv.glm(gmod, data=hormone)$delta
-# yields a quantitative measure for the price we pay not accounting for Lot.
-
-
-# There are other simple estimates of prediction error.
-# residual squared error:
-RSE <- sum((hormone$amount - predict(mod))^2)
-
-# average residual squared error
-RSE/n
-
-# unbiased residual squared error
-# RSE/(n - p)
-RSE/(n - 4)
-
-# unbiased residual squared error: using R output
-summary(mod)$sigma^2
-
-# adjusted residual squared error; p=4 in the example (4 predictors)
-# RSE/(n - 2p)
-RSE/(n - 2*4)
-
-# C_p statistic
-# RSE/n + 2*p*[RSE/(n - p)]/n
-RSE/n + 2*4*summary(mod)$sigma^2/n
-
-# BIC (Bayesian Information Criterion)
-# RSE/n + log(n)*p*[RSE/(n - p)]/n
-RSE/n + log(n)*4*summary(mod)$sigma^2/n
-
-# Why bother with CV when simple alternatives are available?
-# Number of parameters "p" not always known in more complicated modeling;
-# C_p and BIC require this, but CV does not.
-# An example of more complicated modeling follows.
-
-
-# CV with regression trees (recursive partitioning)
-
-# regression trees are fairly easy to interpret and have a 
-# nice graphical representation.
-
-# Example of classification tree:
-library(tree)
-head(iris)
-ir.tr <- tree(Species ~ ., iris)
-plot(ir.tr); text(ir.tr) # produces decision tree
-
-# Let's use CV to build a regression tree for 
-# The Breast Cancer Data Set 
-# from the UCI Machine Learning Repository
-# http://archive.ics.uci.edu/ml/datasets/Breast+Cancer
-breast <- read.csv("breast-cancer.data", header=F, na.strings = "?")
-names(breast) <- c("class", "age", "menopause", "tumor.size","inv.nodes","node.caps",
-                   "deg.malig","breast","breast.quad","irradiat")
-str(breast)
-summary(breast)
-
-# a traditional appraoch:
-# logistic regression
-lmod <- glm(class ~ ., data=breast, family=binomial)
-summary(lmod)
-low.predict <- predict(lmod, type="response") # returns predicted probability
-low.predict <- factor(ifelse(low.predict>0.5, 1, 0)) # convert to binary
-t1  <- table(low.predict, breast$class[complete.cases(breast)]) # confusion matrix
-t1
-(t1[1,1] + t1[2,2])/sum(t1)
-1 - (t1[1,1] + t1[2,2])/sum(t1) # misclassification rate 
-
-# another approach:
-# build classification tree to predict recurrence-events
-# Now build a large tree;
-# predict using all variables; 
-tree.breast <- tree(class ~ ., data=breast)
-plot(tree.breast); text(tree.breast, pretty=0)
-summary(tree.breast)
-
-# now use 10-fold cross-validation to determine optimal size of tree;
-set.seed(4321)
-cv.breast <- cv.tree(tree.breast, FUN=prune.misclass, K=10)
-names(cv.breast)
-# size = number of terminal nodes
-# dev = number of CV errors 
-# k = cost-complexity parameter (tuning parameter); 
-#     controls trade-off between complexity and fit
-cv.breast
-
-# plot error rate as a function of tree size
-plot(cv.breast)
-plot(cv.breast$size,cv.breast$dev,type="b")
-# identify size associated with lowest number of CV errors (dev)
-
-size <- cv.breast$size[which.min(cv.breast$dev)] # tree size with fewest misclassifications
-
-
-# Note CV results can vary
-# do 25 cross-validations:
-cv.results <- numeric(25)
-for(i in 1:25){
-  cv.tmp <- cv.tree(tree.breast, FUN=prune.misclass, K=10)
-  cv.results[i] <- cv.tmp$size[which.min(cv.tmp$dev)]
-}
-table(cv.results)
-
-
-# prune tree using CV results (best = size)
-prune.breast <- prune.misclass(tree.breast, best=size)
-plot(prune.breast)
-text(prune.breast, pretty=0)
-summary(prune.breast)
-prune.breast
-
-
-# bagging and random forests
-library(randomForest)
-# Bagging (ie, Bootstrap aggregation)
-# construct B regression trees using B bootstrapped training sets,
-# and average the resulting predictions;
-# B=500 by default; use ntree argument to change;
-# Note: bagging is random forest with m=p
-set.seed(1984)
-bag.breast <- randomForest(class ~ . , data=breast, na.action=na.omit,
-                             mtry=9, importance=TRUE)
-bag.breast
-
-# random forest (m = p/3 by default)
-set.seed(5150)
-rf.breast <- randomForest(class ~ . , data=breast, na.action=na.omit,
-                            importance=TRUE)
-rf.breast
-
-# bagging and random forest sacrifice interpretation for prediction accuracy;
-# Use varImpPlot() to get an idea of which predictors are most important
-varImpPlot(bag.breast, type=1, main="Bagging Importance Measures")
-varImpPlot(rf.breast, type=1, main="Random Forest Importance Measures")
-
+# Leave-one-out CV
+cv.err <- cv.glm(birthwt, bw.glm, cost) 
+cv.err$delta
 
 
 #####################################################################
 
-# BONUS MATERIAL
 # Bootstrapping time series data
 
 # ch 8, An Intro to the Bootstrap
@@ -951,7 +431,7 @@ mod1 <- ar(x=lh, aic=FALSE, order.max=1, method="ols")
 mod1
 ar(x=lh-mean(lh), aic=FALSE, order.max=1, method="ols") # same thing
 
-# How accurate is our estimate of 0.586? Let's bootstrap SE.
+# How accurate is our estimate of 0.586?
 # we can use the bootstrap to answer this question.
 
 # we will recursively boostrap the residuals:
@@ -1036,4 +516,45 @@ bout <- tsboot(lh, lh.fun, R = 200, l = 3, sim = "fixed")
 bout
 
 
+
+# How to calculate centered jackknife quantiles and jackknife influence values
+# we'll use the patch data from the bootstrap package
+alpha <- c(0.05, 0.1, 0.16, 0.5, 0.84, 0.9, 0.95)
+
+# (1) get the bootstrap replicates
+br <- bout3$t
+# (2) get number of rows in data set
+n <- nrow(patch)
+# (3) get the frequency array for the bootstrap resamples
+f <- boot.array(bout3)
+# (4) create a placeholder matrix for jackknife quantiles
+percentiles <- matrix(data = NA, length(alpha), n)
+# (5) create a placeholder for jackknife influence values
+J <- numeric(n)
+
+# (6) calculate Jackknife quantiles with jth value removed
+for (j in 1:n) {
+  values <- br[f[, j] == 0] # bootstrap replicates calculated without observation j
+  J[j] <- mean(values) # mean of bootstrap replicates with obs j missing
+  
+  # centered jackknife quantiles w/obs j missing
+  percentiles[, j] <- quantile(values,  sort(alpha, decreasing = T)) - J[j] 
+}
+
+# (7) calculate jackknife influence values
+J <- (n - 1) * (mean(J) - J) 
+# (8) standardize jackknife influence values
+J <- J/sqrt(var(J)) 
+
+J
+percentiles
+
+plot()
+
+
+# In case you're interested, how "normal" bootstrap calculated:
+# Normal bootstrap method
+boot.ci(bout2, type="norm")
+bias <- mean(bout2$t)-bout2$t0 # calculate bias
+(bout2$t0 - bias) + c(sd(bout2$t)*-1.96, sd(bout2$t)*1.96)
 

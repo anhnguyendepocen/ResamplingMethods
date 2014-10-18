@@ -12,43 +12,48 @@ To estimate the mean of a population:
 
 - Take a random sample from the population
 - Calculate the mean of the sample to estimate population mean
-- Assess variability of sample mean by calculating standard error: $\frac{s}{\sqrt{n}}$
+- Assess variability of sample mean by calculating standard error: $\frac{s}{\sqrt{n}}$, where $s$ is the standard deviation of the sample
           
 The standard error gives us an idea of how accurate our estimate is. 
 
-## Illustration of Sampling Distribution
+Two items of note about the standard error:
+
+1. the concise formula
+2. it assumes the distribution of the mean is normal
+
+## Illustration of Sampling Distribution of mean
 
 
 ```{r, echo=FALSE}
 # "draw" a population
 par(mfrow=c(2,1))
-x <- seq(10,40,0.01)
-y <- dnorm(x,25,5)
-plot(x,y,type="l", main="A Normal Population with mean=25 and SD=5",
-     sub="red arrow is standard deviation")
-abline(v=25)
+x <- seq(0,20,0.01)
+y <- dchisq(x,5)
+plot(x,y,type="l", main="A Skewed Population with mean=5", xlim=c(0,20))
+segments(x0 = 5,y0 = 0,x1 = 5,y1 = dchisq(5,5)) # add mean
 # add arrow to show 1 standard deviation
-arrows(25,dnorm(25+5,25,5), (25+5), dnorm(25+5,25,5),col="red")
+# arrows(25,dnorm(25+5,25,5), (25+5), dnorm(25+5,25,5),col="red")
 
 # build a sampling distribution via simulation;
 # sample n=15 from the population and find mean; 
 # repeat 5000 times and create histogram to visualize sampling distribution;
 set.seed(123)
-sample.means <- replicate(10000, mean(rnorm(15, 25, 5)))
-hist(sample.means, xlim=c(10,40), freq=F,
+sample.means <- replicate(10000, mean(rchisq(15, 5)))
+hist(sample.means, freq=F, xlim=c(0,20),
      breaks=30, main="Simulated Sampling Distribution of mean for n=15",
-     sub="red arrow is standard error")
+     sub="red arrow is standard deviation of sampling distribution; the standard error estimates it")
 sem <- sd(sample.means) # estimated standard error
 # add arrow to show 1 standard deviation (ie, 1 standard error)
-lines(x,dnorm(x,25,sem))
-arrows(25,dnorm(25+sem,25,sem), (25+sem), 
-       dnorm(25+sem,25,sem),col="red")
+lines(x,dnorm(x,5,sem))
+arrows(5,dnorm(5+sem,5,sem), (5+sem), 
+       dnorm(5+sem,5,sem),col="red")
+box()
 ```
 
 
-## What about other population parameters?
+## What about other statistics?
 
-For example, median, trimmed mean, ratio, correlation, standard deviation, ...
+For example, median, trimmed mean, ratio, correlation, standard deviation, error rate, ...
 
 Sample means are essentially the only statistic with an easy-to-obtain standard error formula.
 
@@ -65,33 +70,37 @@ set.seed(2112)
 N <- 10000
 probs <- 0.5
 dists <- runif(N)  
-# mixture of normal and uniform
+# mixture of chisq and normal
 data1 <- vector(length=N)
 for(i in 1:N){
   if(dists[i]<probs){
     data1[i] = rchisq(1,4)
   } else {
-    data1[i] = rnorm(1, 13, 4)
+    data1[i] = rnorm(1, 20, 10)
   }
 }
-plot(density(data1),xlab="",main="Non-normal population",xlim=c(0,30))
+outd <- density(data1)
+plot(outd,xlab="",main="A skewed population")
+yy <- which(abs(outd$x - median(data1))==min(abs(outd$x - median(data1))))
+segments(x0 = median(data1), y0 = 0, x1 = median(data1), y1 = outd$y[yy])
 
 outm <- replicate(10000,median(sample(data1,15)))
-hist(outm,breaks=30,freq=F,xlim=c(0,30),ylim=c(0,0.2), 
+hist(outm,breaks=30,freq=F,xlim=c(-20,60),ylim=c(0,0.15), 
      xlab="", main="Simulated Sampling Distribution of median for n=15",
      sub="Sampling distribution is not normally distributed. How do we calculate standard error?")
 sem <- sd(outm)
-x <- seq(0,15,length.out = 200)
+x <- seq(-10,30,length.out = 200)
 lines(x,dnorm(x,mean(outm),sem),col="blue")
+box()
 par(mfrow=c(1,1))
 ```
 
 
 ## Introducing Resampling Methods
 
-Replace complicated or inaccurate approximations with computer simulations. Also known as "Bootstrapping Methods".
+Replace complicated or inaccurate approximations with _computer simulations_. Also known as "Bootstrapping Methods".
 
-- Use computer to resample from _original_ random sample to create replicate datasets (bootstrap samples)
+- Use computer to resample from _original random sample_ to create replicate datasets (bootstrap samples)
 - Calculate statistic of interest for _each_ replicate dataset (bootstrap replications)
 - Summarize bootstrap replications (example: take standard deviation to estimate standard error)
     
@@ -151,17 +160,32 @@ set.seed(123)
 sample.means <- replicate(1000, mean(rnorm(15, 25, 5)))
 hist(sample.means, xlim=c(20,30), ylim=c(0,0.35), freq=F, breaks=20, ,xlab="", ylab="",
      main="Simulated Sampling Distribution\n of mean from N(25,5)\n n=15")
+xx <- seq(20,30,length.out = 200)
+lines(xx,dnorm(xx,25,(5/sqrt(15))),col="blue")
 x <- rnorm(15,25,5)
 library(boot)
 boot.means <- boot(x,function(x,i)mean(x[i]),R=1000)
 # boot.means <- replicate(1000, mean(sample(x, replace=T)))
 hist(boot.means$t, xlim=c(20,30), ylim=c(0,0.35), freq=F, breaks=20, xlab="", ylab="",
      main="Bootstrap Distribution\n of mean using one sample of n=15 \n from N(25,5)")
+lines(xx,dnorm(xx,25,(5/sqrt(15))),col="blue")
 
 ```
 
+
+## Limitations of the Bootstrap
+
+The bootstrap requires that the sample serve as a surrogate for the population.
+
+The bootstrap **will fail** if:
+
+- the original sample is not random 
+- the original sample is biased
+- the sample objects are not independent of one another
+
+Again, the original sample must be representative of the population!
+
 ## Bootstrap Algorithm for Estimating Standard Errors
-### Nonparametric bootstrap
 
 1. Select B independent bootstrap samples $\textbf{x}^{*1},\textbf{x}^{*2},\cdots,\textbf{x}^{*B}$ each consisting of _n_ data values drawn with replacement from **the original data set**
 2. Evaluate the bootstrap replication corresponding to each bootstrap sample,
@@ -170,18 +194,6 @@ $$ \hat{\theta}^{*}(b) = s(\textbf{x}^{*b}) \hspace{10 mm} b = 1,2,\cdots,B$$
 $$\hat{se}_{B}=\sqrt{\sum_{b=1}^{B}[\hat{\theta}^{*}(b) - \hat{\theta}^{*}(\cdot)]^{2}/(B - 1)}$$
 
 where $\hat{\theta}^{*}(\cdot) = \sum_{b=1}^{B}\hat{\theta}^{*}(b)/B$
-
-## Bootstrap Algorithm for Estimating Standard Errors
-### Parametric bootstrap
-
-1. Select B independent bootstrap samples $\textbf{x}^{*1},\textbf{x}^{*2},\cdots,\textbf{x}^{*B}$ each consisting of _n_ data values drawn with replacement from **the parametric estimate of the population**
-2. Evaluate the bootstrap replication corresponding to each bootstrap sample,
-$$ \hat{\theta}^{*}(b) = s(\textbf{x}^{*b}) \hspace{10 mm} b = 1,2,\cdots,B$$
-3. Estimate the standard error by the sample standard deviation of the B replications:
-$$\hat{se}_{B}=\sqrt{\sum_{b=1}^{B}[\hat{\theta}^{*}(b) - \hat{\theta}^{*}(\cdot)]^{2}/(B - 1)}$$
-
-where $\hat{\theta}^{*}(\cdot) = \sum_{b=1}^{B}\hat{\theta}^{*}(b)/B$
-
 
 ## Implementing Bootstrap Algorithms in R
 Use the `boot` package.
@@ -217,7 +229,7 @@ where $\hat{\theta}^{*}(\cdot) = \sum_{b=1}^{B}\hat{\theta}^{*}(b)/B$
 
 In other words, take the mean of the bootstrap replications and subtract the original estimate.
 
-As a rule of thumb, bias less than 0.25 standard errors can be ignored. ($\widehat{bias}/\widehat{se} \leq 0.25$)
+As a rule of thumb, bias less than 0.25 standard errors can be ignored. ($|\widehat{bias}/\widehat{se}| < 0.25$)
 
 Large bias may be an indication that your statistic is not an appropriate estimator of the population parameter.
 
@@ -245,7 +257,7 @@ where $\hat{\theta}_{(\cdot)} = \sum_{i=1}^{n}\hat{\theta}_{(i)}/n$.
 
 The jackknife estimate of standard error:
 
-$$\widehat{se}_{jack} = [\frac{n-1}{n}\sum(\hat{\theta}_{(i)} - \hat{\theta}_{(\cdot)})^{2}]^{1/2}$$
+$$\widehat{se}_{jack} = \sqrt{ \frac{n-1}{n}\sum(\hat{\theta}_{(i)} - \hat{\theta}_{(\cdot)})^{2}}$$
 
 The jackknife provides a simple approximation to the bootstrap for estimation of bias and standard errors.
 
@@ -255,13 +267,15 @@ Let's go to R.
 
 A common use of the jackknife is for bootstrap diagnostics.
 
-The jackknife-after-bootstrap looks at bootstrap samples in which the _i_th point did not appear.
+The jackknife-after-bootstrap plot looks at bootstrap samples in which the _i_th point did not appear.
+
+The plot shows the sensitivity of the statistic and of the percentiles of its bootstrapped distribution to deletion of individual observations.
 
 Centered quantiles are generated for all jackknife samples and plotted against _standardized jackknife influence values_:
 
 $$l_{jack,j} = (n - 1)(\hat{\theta}_{(\cdot)} - \hat{\theta}_{(i)})/\sqrt{(var(\hat{\theta}_{(i)})} $$
 
-R Syntax: `jack.after.boot(boot.object)`
+R Syntax: `jack.after.boot(boot.object)` or `plot(boot.object, jack=TRUE) `
 
 ## The Jackknife-after-Bootstrap Plot - Example
 ```{r, echo=FALSE}
@@ -338,7 +352,7 @@ If the bootstrap distribution is roughly normal, then the classic (standard norm
 The percentile method provides good coverage for asymmetric distributions and doesn't require transforming data.
 
 ```
-# Basic R code
+# R code
 boot.ci(boot.out, conf = 0.95, type = "perc")
 ```
 
@@ -362,7 +376,7 @@ Provides better coverage than the percentile method, automatically corrects for 
 More difficult to explain than the percentile interval, but not much more difficult to calculate.
 
 ```
-# Basic R code
+# R code
 boot.ci(boot.out, conf = 0.95, type = "bca")
 ```
 
@@ -401,55 +415,6 @@ The formulas for the acceleration and the bias-correction are complicated. See E
 
 Let's go to R.
 
-## Permutation Tests
-
-Resampling methods can be use for hypothesis testing. One such method is a Permutaton Test.
-
-The main application for a permutaton test is the Two-Sample Problem:
-
-- Say we observe two independent random samples $\textbf{z} = (z_{1}, z_{2},\cdots,z_{n})$ and $\textbf{y} = (y_{1}, y_{2},\cdots,y_{m})$ drawn from possibly different probability distributions $F$ and $G$.
-- Having observed $\textbf{z}$ and $\textbf{y}$, we wish to test the null hypothesis of no difference between $F$ and $G$.
-
-The permutation test allows us to test this hypothesis without making assumptions about $F$ and $G$.
-
-## Steps of the Permutation Test
-
-Say group 1 has $n$ members and group 2 has $m$ members:
-
-1. combine both groups into one sample
-2. sample $n$ observations WITHOUT replacement and place in one group
-3. place remaining $m$ observations in another group
-4. compute difference between group means
-5. repeat steps 1-4 many times
-6. if original difference falls outside middle 95% of distribution of differences, then reject null.
-
-All permutations of group 1 and group 2 are equally likely if $F = G$.
-
-Note: these steps use Monte Carlo sampling. A true permutation test would compute _all possible_ permutations of group membership.
-
-## Bootstrap Hypothesis Testing
-
-Bootstrap hypothesis testing is similar to the permutation test, except sampling is _with_ replacement instead of without replacement. 
-
-For the two-sample problem:
-
-- In a permutation test, we fix the order of the combined group members and randomly sample permutations of group membership.
-- With the bootstrap, we combine the groups to create an estimate of the common population and then sample _with_ replacement from it to create two groups.
-
-Bootstrap hypothesis testing is more general than the permutation test and can be applied to a range of problems.
-
-## Steps of Bootstrap Hypothesis Testing
-
-For the two-sample problem, say group 1 has $n$ members and group 2 has $m$ members:
-
-1. combine both groups into one sample
-2. sample $n + m$ observations WITH replacement
-3. place the first $n$ observations into one group and the remaining $m$ in another group
-4. compute difference between group means
-5. repeat steps 1-4 many times
-6. if original difference falls outside middle 95% of distribution of differences, then reject null.
-
-Let's go to R.
 
 ## Bootstrapping Regressions
 
@@ -485,15 +450,13 @@ Residual resampling enforces the strong assumption that errors are identically d
 
 Case resampling is less sensitive to assumptions, therefore it may be preferable in some cases.
 
+The car package provides a handy function for bootstrapping regression models: `Boot`
+
+Boot(model, R=1000, method="case")  
+Boot(model, R=1000, method="residual")  
+
 Let's go to R.
 
-## Bootstrap Tips
-
-For the bootstrap to work, the sample _must_ be random and the observations independent. 
-
-In the case of time series, a moving-block bootstrap is recommended. (see Bonus material in R script)
-
-Avoid using the bootstrap for extreme statistics such as the minimum, maximum, 90th percentile, etc.
 
 ## Cross-Validation
 
@@ -572,20 +535,32 @@ It's actually more complicated than this, but that's the general idea. We use _r
 
 ## References
 
-Canty, A.J. (2002) _Resampling methods in R: the boot package_. R News. **2/3**, 2-7.
+Canty, A.J. (2002) _Resampling methods in R: the boot package_. R News. 2/3, 2-7.
 
 Davison, A.C. and Hinkley, D.V. (1997) _Bootstrap methods and their applications_. Cambridge University Press, Cambridge.
 
-Davison, A.C. and Kuonen, D. (2002) _An introduction to the Bootstrap with applications in R_. Statistical Computing & Statistical Graphics Newsletter. **13**, 6-11.
+Davison, A.C. and Kuonen, D. (2002) _An introduction to the Bootstrap with applications in R_. Statistical Computing & Statistical Graphics Newsletter. 13, 6-11.
 
-Efron, B. and Tibshirani, R.J. (1993) _An introduction to the bootstrap_. Chapman and Hall, London, New York.
+Diaconis, P. and Efron, B. (1983) _Computer-Intensive Methods in Statistics_. Scientific American. Vol 248, No 5, 116-130.
+
+Efron, B. and Tibshirani, R.J. (1993) _An Introduction to the Bootstrap_. Chapman and Hall, London, New York.
 
 ## References (cont'd)
 
 Fox, J. and Weisberg, S. (2012) _Bootstrapping regression models in R, an appendix to an R Companion to Applied Regression, 2nd ed_. Sage, London.
 
-James, G. et al. (2013) _An Introduction to statistical learning_. Springer, New York.
+James, G. et al. (2013) _An Introduction to Statistical Learning_. Springer, New York.
 
-Maindonald, J. and Braun, J.W. (2010) _Data analysis and graphics using R, 3rd Ed_. Cambridge University Press, Cambridge.
+Maindonald, J. and Braun, J.W. (2010) _Data Analysis and Graphics Using R, 3rd Ed_. Cambridge University Press, Cambridge.
 
 
+## StatLab
+
+Thanks for coming today!
+
+For help and advice with your data analysis, contact the StatLab to set up an appointment: statlab@virginia.edu
+
+Sign up for more workshops or see past workshops:
+http://data.library.virginia.edu/statlab/
+
+Register for the Research Data Services newsletter to stay up-to-date on StatLab events and resources: http://data.library.virginia.edu/newsletters/
