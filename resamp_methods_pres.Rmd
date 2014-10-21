@@ -452,8 +452,8 @@ Case resampling is less sensitive to assumptions, therefore it may be preferable
 
 The car package provides a handy function for bootstrapping regression models: `Boot`
 
-Boot(model, R=1000, method="case")  
-Boot(model, R=1000, method="residual")  
+`Boot(model, R=1000, method="case")`  
+`Boot(model, R=1000, method="residual")`  
 
 Let's go to R.
 
@@ -496,42 +496,7 @@ The `boot` package provides the `cv.glm` function to calculate K-fold cross-vali
 
 Cross validation also works for more complex modeling methods.
 
-
-## Cross-Validation for Classification Trees
-
-Classification Trees are simple and useful for interpretation.
-
-The predictor space is split into regions such that the regions contain a decisive majority of a class.
-
-Uses procedure that chooses splitting variables and splitting points that best discriminate between outcome classes.
-
-The rules for creating the regions can be summarized with a tree.
-
-We use cross-validation to determine the optimal tree size.
-
-## Example of a Classification Tree
-Classify species of iris; at each branch, go left if true, right otherwise
-```{r, echo=FALSE}
-library(tree)
-ir.tr <- tree(Species ~ ., iris)
-ir.prune <- prune.misclass(ir.tr, best=4)
-plot(ir.prune)
-text(ir.prune, pretty=0)
-```
-
-## Cross-Validation with Classification Trees
-
-How large to make a tree? Best-sized tree is one with lowest misclassification rate for _new data_.
-
-Usually do not have new data, so we use cross-validation:
-
-1. Split data into 10 groups
-2. Build tree with 90% of data, test with remaining 10%; do for all 10 groups.
-3. For each group, compute misclassification rate
-
-The best tree size is the one that gives the lowest misclassification rate.
-
-It's actually more complicated than this, but that's the general idea. We use _resampling_ to estimate error and determine best tree size.
+Let's go to R.
 
 ## References
 

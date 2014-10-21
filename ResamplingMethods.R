@@ -20,15 +20,15 @@ BMI(weight=213,height=69)
 BMI(c(200,198,145),c(65,70,64)) # 3 people
 
 # EXAMPLE 2
-# randomly sample n items from data vector and calculate mean
+# randomly sample n items with replacement from data vector and calculate mean
 smean <- function(data, n){
-  i <- sample(length(data),n) # items to sample
+  i <- sample(length(data),n, replace=TRUE) # indices to sample
   mean(data[i])
 }
 
 # generate fake data
-fake <- rnorm(1000,mean = 200,sd = 10)
-# sample 10 items (without replacement) from fake and calculate mean 
+fake <- rnorm(30,mean = 200,sd = 10)
+# sample 10 items with replacement from fake and calculate mean 
 smean(data=fake, n=10)
 
 
@@ -67,7 +67,7 @@ sd(mouse.t)/sqrt(7) # standard error using formula
 
 # How to do with boot() function (from the boot package)
 # first define a function;
-# In this case it needs two arguments:
+# To work with boot(), it needs two arguments:
 # 1. data
 # 2. indices which define the bootstrap sample
 mean.fun <- function(data,ind) mean(data[ind])
@@ -85,6 +85,7 @@ mean(mouse.t[indices])
 mean.fun(data=mouse.t,ind=indices) 
 
 # now use in the boot function with R=200 replications:
+# Basic boot arguments: data, statistic, R
 boot(data=mouse.t, statistic=mean.fun, R=200)
 # do it again; different result
 
@@ -150,8 +151,7 @@ sd(bout2$t)
 # placebo patch, an "old" patch manufactured at an older plant, and a "new"
 # patch manufactured at a newly opened plant.
 
-data(patch)
-head(patch)
+patch
 # z = oldpatch - placebo
 # y = newpatch - oldpatch
 
@@ -171,7 +171,7 @@ ratio.fun <- function(dat, ind){
 }
 
 # do the bootstrap
-bout3 <- boot(patch, ratio.fun, R=400)
+bout3 <- boot(patch, ratio.fun, R=999)
 bout3
 sd(bout3$t)
 plot(bout3)
@@ -284,7 +284,7 @@ boot.ci(bout2, type=c("perc","bca","norm"))
 # patch data
 bout3
 plot(bout3)
-boot.ci(bout2, type=c("perc","bca","norm"))
+boot.ci(bout3, type=c("perc","bca","norm"))
 
 # Bootstraping Regression Models ------------------------------------------
 
@@ -310,7 +310,6 @@ legend("topright",legend = c("lm","rlm"),lty = c(1,2))
 
 summary(m1) # quadratic term significant
 summary(m2) # quadratic term not significant
-
 
 # doses were fixed values chosen by investigator, therefore makes sense to
 # bootstrap residuals
@@ -356,6 +355,7 @@ par(mfrow=c(1,1))
 bw.glm <- glm(low ~ age + lwt + factor(race) + smoke + ht, 
               data=birthwt, family=binomial)
 summary(bw.glm)
+# calculate error rate
 pred <- ifelse(fitted(bw.glm) > 0.5, 1, 0)
 tab <- table(birthwt$low, pred)
 tab
@@ -396,8 +396,8 @@ cv.err$delta
 # first number is CV estimate; 2nd number is bias-corrected version;
 
 # Leave-one-out CV
-cv.err <- cv.glm(birthwt, bw.glm, cost) 
-cv.err$delta
+cv.err2 <- cv.glm(birthwt, bw.glm, cost) 
+cv.err2$delta
 
 
 #####################################################################
