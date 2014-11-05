@@ -3,14 +3,17 @@
 # StatLab@UVa Library
 # Clay Ford
 
-library(boot) 
-library(bootstrap) # has data from book, An Introduction to the Bootstrap (Efron & Tibshirani, 1993)
+# install.packages("bootstrap")
+# install.packages("car")
 
+library(boot) # included with base R installation
+library(bootstrap) # has data from book, An Introduction to the Bootstrap (Efron & Tibshirani, 1993)
 
 # Functions in R ----------------------------------------------------------
 
-# Quick demo on writing a function in R
-# Use the function() function; arguments are variables 
+# Quick demo on writing a function in R.
+# R functions are like mini programs.
+# Use the function() function; arguments are variables.
 
 # EXAMPLE 1
 # write function to calculate Body Mass Index (BMI)
@@ -21,6 +24,13 @@ BMI(c(200,198,145),c(65,70,64)) # 3 people
 
 # EXAMPLE 2
 # randomly sample n items with replacement from data vector and calculate mean
+
+# an aside on R indices
+x <- c(12,24,34,22,87)
+x[2] # select 2nd number
+x[c(2,1,2,4,3)] # select 2nd, 1st, 2nd, 4th and 3rd numbers, in that order
+
+
 smean <- function(data, n){
   i <- sample(length(data),n, replace=TRUE) # indices to sample
   mean(data[i])
@@ -30,8 +40,8 @@ smean <- function(data, n){
 fake <- rnorm(30,mean = 200,sd = 10)
 # sample 10 items with replacement from fake and calculate mean 
 smean(data=fake, n=10)
-
-
+# sample 3 items with replacement from fake and calculate mean 
+smean(data=fake, n=3)
 
 # Bootstrapping SE --------------------------------------------------------
 
@@ -40,10 +50,6 @@ smean(data=fake, n=10)
 # Measurement unit is days of survival following surgery.
 mouse.t
 mean(mouse.t)
-
-# assess normality; hard to assess with n=7
-qqnorm(mouse.t)
-qqline(mouse.t)
 
 # take a bootstrap sample (must be with replacement)
 sample(mouse.t,replace=TRUE) 
@@ -78,11 +84,11 @@ indices
 mouse.t
 mouse.t[indices]
 mean(mouse.t[indices])
-# what did you get?
 
 # plug data and indices into function; returns mean of values selected by
 # indices:
 mean.fun(data=mouse.t,ind=indices) 
+# what did you get?
 
 # now use in the boot function with R=200 replications:
 # Basic boot arguments: data, statistic, R
@@ -101,8 +107,7 @@ bout
 # to extract the SE
 sd(bout$t)
 
-# should always examine graphical plot of the bootstrap replicates
-# Do they look sensible? Check for discreteness.
+# examine graphical plot of the bootstrap replicates
 plot(bout)
 
 # see the frequency or index array for the bootstrap resamples:
@@ -193,6 +198,7 @@ mean(bout2$t) - bout2$t0 # bias
 abs(mean(bout2$t) - bout2$t0)/sd(bout2$t) < 0.25
 
 # a function for the above calculations
+# obj = a boot object
 bias <- function(obj){
   list(bias=mean(obj$t) - obj$t0,
        ignore=abs(mean(obj$t) - obj$t0)/sd(obj$t) < 0.25)
@@ -223,13 +229,14 @@ bout
 patch
 
 # first write a function; have to use "x" for indices
-ratio.fun <- function(x, dat){
-  mean(dat[x,6])/mean(dat[x,5]) # mean of column 6/mean of column 5
+ratio.fun.j <- function(x, dat){
+  tmp <- dat[x,] 
+  mean(tmp$y)/mean(tmp$z)
 }
 
 # find jackknife values for the sample ratio
 # have to pass as data to jackknife the vector 1,2,..n.
-jackknife(1:nrow(patch), ratio.fun, patch)
+jackknife(1:nrow(patch), ratio.fun.j, patch)
 # Compare to bootstrap values
 bout3
 
@@ -279,7 +286,7 @@ plot(bout2) # note the skewed histogram
 # histogram and qq plot are not symmetric and normal,
 # so normal and percentile intervals should not be similar.
 boot.ci(bout2, type=c("perc","bca","norm"))
-# anything look strange about "normal" interval?
+# anything look strange about your "normal" interval?
 
 # patch data
 bout3
@@ -301,7 +308,8 @@ plot(cell) # note the outlier
 # fit a standard linear model with quadratic term and no intercept;
 # no intercept because survival is log(1)=0 with no radiation dose
 m1 <- lm(log.surv ~ -1 + poly(dose,2,raw = T), data=cell)
-# resistant regression with rlm()
+# robust regression with rlm()
+# maxit: limit on the number of IWLS iterations.
 m2 <- rlm(log.surv ~ -1 + poly(dose,2,raw = T), data=cell, maxit = 100)
 # add fitted lines
 lines(cell[,1], fitted(m1))
@@ -310,6 +318,8 @@ legend("topright",legend = c("lm","rlm"),lty = c(1,2))
 
 summary(m1) # quadratic term significant
 summary(m2) # quadratic term not significant
+
+# Let's bootstrap the standard errors of the rlm model.
 
 # doses were fixed values chosen by investigator, therefore makes sense to
 # bootstrap residuals
@@ -342,6 +352,7 @@ par(mfrow=c(1,1))
 
 # low birth weight data (from Applied Logistic Regression, 2nd ed.)
 # birthwt data from MASS package
+head(birthwt)
 
 # Selected variables:
 # low = birth weight < 2500 g (1 = yes, 0 = no)
@@ -351,11 +362,14 @@ par(mfrow=c(1,1))
 # smoke = smoking status during pregnancy
 # ht = history of hypertension
 
-# Is low birth weight related to the factors above?
+# model probability of low birth weight using factors above.
 bw.glm <- glm(low ~ age + lwt + factor(race) + smoke + ht, 
               data=birthwt, family=binomial)
 summary(bw.glm)
+
 # calculate error rate
+# fitted(bw.glm) returns predicted probabilities
+# if P > 0.5, then predict 1, otherwise 0
 pred <- ifelse(fitted(bw.glm) > 0.5, 1, 0)
 tab <- table(birthwt$low, pred)
 tab
@@ -386,9 +400,9 @@ sum(error.rate)/5 # 5-fold CV test error
 # cross validation using cv.glm
 # need to create a "cost function" to calculate error rate
 # r = observed response (0 or 1)
-# pi = predicted probability
-# if abs(r - pi) > 0.5, count as a missclassification
-cost <- function(r, pi = 0) mean(abs(r-pi) > 0.5)
+# p = predicted probability
+# if abs(r - p) > 0.5, count as a missclassification
+cost <- function(r, p = 0) mean(abs(r-p) > 0.5)
 
 # 5-fold CV
 cv.err <- cv.glm(birthwt, bw.glm, cost, K = 5) 
@@ -401,6 +415,109 @@ cv.err2$delta
 
 
 #####################################################################
+# BONUS MATERIAL!
+
+
+# Permutation Tests
+
+# Again, let's use the mouse data.
+# Having observed these two sets of values from treatment and control,
+# we wish to test the null hypothesis they were drawn from populations
+# with identical probability distributions.
+
+# Say mouse.t was drawn from distribution F,
+# and mouse.c was drawn from distribution G.
+# We want to test F = G, (ie, same probability distributions)
+
+# A traditional test: the T-Test
+# assumes F and G are normally distributed with possibly different means:
+t.test(mouse.t, mouse.c,alternative="greater",var.equal=TRUE)
+
+# Now, let's do a permutation test.
+# It makes no assumptions about distribution of F and G.
+
+# Process: 
+# 1. combine n + m observations from both groups
+# 2. sample n observations WITHOUT replacement and place in one group
+# 3. place remaining m observations in another group
+# 4. compute difference between group means.
+# 5. repeat steps 1-4 many times
+# 6. if original difference falls outside middle 95% of 
+#    dist'n of differences, then reject null.
+
+all.mouse  <- c(mouse.t, mouse.c) 
+n <- length(mouse.t)
+m <- length(mouse.c)
+
+# function to compute difference between group means
+cdiff <- function(tot,n){
+  s <- sample(tot, n, replace = FALSE)
+  mean(all.mouse[s]) - mean(all.mouse[-s])
+} 
+
+# compute difference in means for 1000 permutations
+diff <- replicate(n = 1000, cdiff(tot=(n+m),n=n))
+
+# compute achieved significance level (p-value)
+sum(diff >= (mean(mouse.t) - mean(mouse.c)))/1000
+# this also works
+mean(diff >= (mean(mouse.t) - mean(mouse.c)))
+
+# plot distribution of differences
+hist(diff, breaks=30, main="Permutation Test")
+abline(v=(mean(mouse.t) - mean(mouse.c)), lty=2)
+
+# can use the perm package for this, which has permTS() function
+library(perm)
+permTS(mouse.t, mouse.c, alternative ="greater", method="exact.mc",
+       control=permControl(nmc=1000))
+# complete enumeration of all possibilities
+permTS(mouse.t, mouse.c, alternative ="greater", method="exact.ce")
+
+
+######
+
+# How to calculate centered jackknife quantiles and jackknife influence values
+# we'll use the patch data from the bootstrap package
+alpha <- c(0.05, 0.1, 0.16, 0.5, 0.84, 0.9, 0.95)
+
+# (1) get the bootstrap replicates
+br <- bout3$t
+# (2) get number of rows in data set
+n <- nrow(patch)
+# (3) get the frequency array for the bootstrap resamples
+f <- boot.array(bout3)
+# (4) create a placeholder matrix for jackknife quantiles
+percentiles <- matrix(data = NA, length(alpha), n)
+# (5) create a placeholder for jackknife influence values
+J <- numeric(n)
+
+# (6) calculate Jackknife quantiles with jth value removed
+for (j in 1:n) {
+  values <- br[f[, j] == 0] # bootstrap replicates calculated without observation j
+  J[j] <- mean(values) # mean of bootstrap replicates with obs j missing
+  
+  # centered jackknife quantiles w/obs j missing
+  percentiles[, j] <- quantile(values,  sort(alpha, decreasing = T)) - J[j] 
+}
+
+# (7) calculate jackknife influence values
+J <- (n - 1) * (mean(J) - J) 
+# (8) standardize jackknife influence values
+J <- J/sqrt(var(J)) 
+
+J
+percentiles
+
+#####
+
+# In case you're interested, how "normal" bootstrap calculated:
+# Normal bootstrap method
+boot.ci(bout2, type="norm")
+bias <- mean(bout2$t)-bout2$t0 # calculate bias
+(bout2$t0 - bias) + c(sd(bout2$t)*-1.96, sd(bout2$t)*1.96)
+
+#####
 
 # Bootstrapping time series data
 
@@ -514,47 +631,3 @@ lh.fun <- function(dat) {
 # sim = "fixed" means block resampling with fixed block lengths of 3
 bout <- tsboot(lh, lh.fun, R = 200, l = 3, sim = "fixed")
 bout
-
-
-
-# How to calculate centered jackknife quantiles and jackknife influence values
-# we'll use the patch data from the bootstrap package
-alpha <- c(0.05, 0.1, 0.16, 0.5, 0.84, 0.9, 0.95)
-
-# (1) get the bootstrap replicates
-br <- bout3$t
-# (2) get number of rows in data set
-n <- nrow(patch)
-# (3) get the frequency array for the bootstrap resamples
-f <- boot.array(bout3)
-# (4) create a placeholder matrix for jackknife quantiles
-percentiles <- matrix(data = NA, length(alpha), n)
-# (5) create a placeholder for jackknife influence values
-J <- numeric(n)
-
-# (6) calculate Jackknife quantiles with jth value removed
-for (j in 1:n) {
-  values <- br[f[, j] == 0] # bootstrap replicates calculated without observation j
-  J[j] <- mean(values) # mean of bootstrap replicates with obs j missing
-  
-  # centered jackknife quantiles w/obs j missing
-  percentiles[, j] <- quantile(values,  sort(alpha, decreasing = T)) - J[j] 
-}
-
-# (7) calculate jackknife influence values
-J <- (n - 1) * (mean(J) - J) 
-# (8) standardize jackknife influence values
-J <- J/sqrt(var(J)) 
-
-J
-percentiles
-
-plot()
-
-
-# In case you're interested, how "normal" bootstrap calculated:
-# Normal bootstrap method
-boot.ci(bout2, type="norm")
-bias <- mean(bout2$t)-bout2$t0 # calculate bias
-(bout2$t0 - bias) + c(sd(bout2$t)*-1.96, sd(bout2$t)*1.96)
-

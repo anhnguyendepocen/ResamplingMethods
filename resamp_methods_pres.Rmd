@@ -481,8 +481,8 @@ To get around this, cross-validation uses part of the available data to fit the 
 
 4. Do the above for $k = 1,2,\dots K$ and combine the $K$ estimates of prediction error for regression and classification, respectively:
 
-    + $CV_{(k)} = \frac{1}{k}\sum_{i=1}^{k}MSE_{i}$ where $MSE_{i} = (y_{i} - \hat{y}_{i})^2$ (Mean Square Error)
-    + $CV_{(k)} = \frac{1}{k}\sum_{i=1}^{k}Err_{i}$ where $Err = I(y_{i} \neq \hat{y}_{i})$ (Number of misclassified observations)
+    + $CV_{(k)} = \frac{1}{k}\sum_{i=1}^{k}MSE_{i}$ where $MSE_{i} = \frac{1}{n_{i}}\sum_{i=1}^{n}(y_{i} - \hat{y}_{i})^2$ (Mean Square Error)
+    + $CV_{(k)} = \frac{1}{k}\sum_{i=1}^{k}Err_{i}$ where $Err_{i} = \frac{1}{n_{i}}\sum_{i=1}^{n}I(y_{i} \neq \hat{y}_{i})$ (Classification Error Rate)
 
 
 
